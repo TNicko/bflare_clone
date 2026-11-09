@@ -1,0 +1,21 @@
+# Linux / Hetzner overlay for cAdvisor (Docker 29 + containerd snapshotter).
+# Included automatically by observability-up.sh / observability-down.sh on Linux.
+# Not used on Docker Desktop (macOS) — those mounts break sock bind-mounts.
+services:
+  cadvisor:
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --store_container_labels=true
+      - --disable_metrics=disk
+      - --containerd=/run/containerd/containerd.sock
+      - --containerd-namespace=moby
+    volumes:
+      - /:/rootfs:ro
+      - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /var/lib/containerd/:/var/lib/containerd:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro

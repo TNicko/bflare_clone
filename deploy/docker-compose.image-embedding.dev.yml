@@ -1,0 +1,27 @@
+services:
+  image-embedding:
+    build:
+      context: ../backend
+      dockerfile: services/image_embedding/Dockerfile
+    container_name: harvest-image-embedding-dev
+    ports:
+      - "127.0.0.1:11435:11435"
+    volumes:
+      - ../backend:/app
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:11435/health',timeout=3)); exit(0 if d.get('status')=='ok' else 1)\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 600s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"

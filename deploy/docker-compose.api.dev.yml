@@ -1,0 +1,44 @@
+name: harvest-dev
+
+include:
+  # - docker-compose.indexer.dev.yml
+  # - docker-compose.embedding.dev.yml
+  # - docker-compose.image-embedding.dev.yml
+
+services:
+  api:
+    build:
+      context: ../backend
+      dockerfile: services/api/Dockerfile
+    container_name: harvest-api-dev
+    env_file:
+      - ../backend/services/api/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app
+    command:
+      [
+        "uvicorn",
+        "services.api.src.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # plain|json|rich — use json for Loki field extraction; plain is human-readable.
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - PYTHONUNBUFFERED=1
+      # Volume-mount uses host tree; keep libs importable even if image editable install is stale.
+      - PYTHONPATH=/app/libs:/app

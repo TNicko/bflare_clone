@@ -1,0 +1,218 @@
+// Alloy agent for workload hosts (Hetzner work box + Raspberry Pis).
+// - Docker logs → Loki on the observability host
+// - Host CPU/RAM (node_exporter) → Prometheus remote_write on the obs host
+//
+// Required env (deploy/observability/agent/.env):
+//   LOKI_PUSH_URL=http://<obs-tailscale>:3100/loki/api/v1/push
+//   PROMETHEUS_REMOTE_WRITE_URL=http://<obs-tailscale>:9090/api/v1/write
+// Optional:
+//   AGENT_HOSTNAME=pi-01   // stable label in Grafana (defaults to container hostname)
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  // Workload containers: API and fleet jobs agent.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(harvest-jobs-agent|harvest-api|harvest-prod_api).*"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(.+)"
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = ".*_(.+)"
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*api.*)"
+    target_label  = "service"
+    replacement   = "api"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*jobs-agent.*)"
+    target_label  = "service"
+    replacement   = "jobs-agent"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_HOSTNAME")
+  }
+
+  rule {
+    target_label = "shipper"
+    replacement  = "alloy-agent"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.docker_logs.rules
+  forward_to    = [loki.process.structured.receiver]
+}
+
+loki.process "structured" {
+  forward_to = [loki.write.remote.receiver]
+
+  stage.match {
+    selector = "{service=\"api\"}"
+
+    stage.json {
+      expressions = {
+        level     = "level",
+        logger    = "logger",
+        msg       = "msg",
+        ts        = "ts",
+        harvester = "harvester",
+        user      = "user",
+        exc_info  = "exc_info",
+      }
+    }
+
+    stage.template {
+      source   = "level_norm"
+      template = "{{ ToLower .level }}"
+    }
+
+    stage.template {
+      source   = "user_norm"
+      template = "{{ if .user }}{{ .user }}{{ else }}system{{ end }}"
+    }
+    stage.template {
+      source   = "line"
+      template = "[{{ .user_norm }}] {{ .msg }}{{ if .exc_info }}\n{{ .exc_info }}{{ end }}"
+    }
+
+    stage.labels {
+      values = {
+        level     = "level_norm",
+        logger    = "logger",
+        harvester = "harvester",
+        user      = "user_norm",
+      }
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "2006-01-02T15:04:05.000Z"
+    }
+
+    stage.output {
+      source = "line"
+    }
+  }
+
+  stage.match {
+    selector = "{service=\"jobs-agent\"}"
+
+    stage.json {
+      expressions = {
+        level    = "level",
+        logger   = "logger",
+        msg      = "msg",
+        ts       = "ts",
+        exc_info = "exc_info",
+      }
+    }
+
+    stage.template {
+      source   = "level_norm"
+      template = "{{ ToLower .level }}"
+    }
+
+    stage.labels {
+      values = {
+        level  = "level_norm",
+        logger = "logger",
+      }
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "2006-01-02T15:04:05.000Z"
+    }
+
+    stage.template {
+      source   = "line"
+      template = "{{ .msg }}{{ if .exc_info }}\n{{ .exc_info }}{{ end }}"
+    }
+
+    stage.output {
+      source = "line"
+    }
+  }
+
+  stage.match {
+    selector = "{service=\"api\"} |= \"GET /metrics\""
+    action   = "drop"
+  }
+  stage.match {
+    selector = "{service=\"api\"} |= \"GET /health\""
+    action   = "drop"
+  }
+}
+
+loki.write "remote" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+  }
+}
+
+// Host CPU / memory via sibling node-exporter container.
+prometheus.scrape "node" {
+  targets = [{
+    __address__ = "node-exporter:9100",
+  }]
+  forward_to      = [prometheus.relabel.host.receiver]
+  scrape_interval = "15s"
+  job_name        = "node"
+}
+
+prometheus.relabel "host" {
+  forward_to = [prometheus.remote_write.obs.receiver]
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_HOSTNAME")
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "node"
+  }
+
+  rule {
+    target_label = "shipper"
+    replacement  = "alloy-agent"
+  }
+}
+
+prometheus.remote_write "obs" {
+  endpoint {
+    url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+  }
+}

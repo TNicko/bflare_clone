@@ -1,0 +1,30 @@
+# GPU SigLIP image-embedding server for the AWS burst embed-fleet worker.
+# Same service as services/image_embedding/Dockerfile (CPU, used on the Hetzner box);
+# this variant installs CUDA PyTorch wheels instead. Build from backend/:
+#
+#   docker build -f services/image_embedding/Dockerfile.gpu -t harvest-image-embedding-gpu .
+#
+# Run with: --gpus all (host needs an NVIDIA driver + nvidia-container-toolkit; the
+# PyTorch cuXXX wheels bundle their own CUDA runtime, so no system CUDA toolkit is
+# required in the image itself).
+#
+# cu126 confirmed to publish both torch==2.12.1 and torchvision==0.27.1 for cp314
+# (this image's Python) as of this writing. If those pins change, re-check
+# https://download.pytorch.org/whl/<tag>/torch/ for a cp314 build before switching tags.
+
+FROM python:3.14-bookworm
+EXPOSE 11435
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY libs ./libs
+COPY services/image_embedding ./services/image_embedding
+
+RUN pip install --no-cache-dir -U pip \
+    && pip install --no-cache-dir \
+        torch==2.12.1 \
+        torchvision==0.27.1 \
+        --index-url https://download.pytorch.org/whl/cu126 \
+    && pip install --no-cache-dir -e ".[image-embedding-server]"
+
+CMD ["python", "-m", "services.image_embedding.main"]

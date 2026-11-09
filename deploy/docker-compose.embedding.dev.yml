@@ -1,0 +1,19 @@
+# Standalone BGE-M3 embedding server (Ollama).
+# Standalone: docker compose -p harvest-dev -f deploy/docker-compose.embedding.dev.yml up -d
+
+services:
+  embedding:
+    image: lianghsun/ollama-bge-m3-embed
+    container_name: harvest-embedding-dev
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - embedding-dev-data:/root/.ollama
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  embedding-dev-data:

@@ -1,0 +1,18 @@
+# Outbox indexer.
+# Prefer deploy/scripts/dev-up.sh. Requires Postgres + OpenSearch on the same compose project.
+services:
+  indexer:
+    build:
+      context: ../backend
+      dockerfile: services/indexer/Dockerfile
+    container_name: harvest-indexer-dev
+    env_file:
+      - ../backend/services/indexer/.env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-local}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"

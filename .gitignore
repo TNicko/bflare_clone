@@ -1,0 +1,48 @@
+# macOS-related
+.DS_Store
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.egg-info/
+
+.env
+
+# Telethon
+*.session
+
+
+# Tmp
+tmp.json
+tmp/
+
+# Local caches and job state
+node_modules/
+.astro/
+.archive_messages_checkpoints/
+backend/.deps/
+
+
+.DS_Store
+.env
+.production.env
+deploy/observability/.env
+deploy/observability/agent/.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+*.session
+.mypy_cache/
+tmp.json
+tmp/
+tmp.py
+script.py
+dummy.py

@@ -1,0 +1,40 @@
+---
+description: Psycopg connections use dict rows. Read fetch results by column name.
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Psycopg dict rows
+
+`db.connection.connect` / `connect_async` set `row_factory=dict_row`. A
+`fetchone()` / `fetchall()` row from `conn.cursor()` or
+`conn.cursor(row_factory=dict_row)` is a mapping, not a tuple.
+
+Pass `row_factory=dict_row` on the cursor. A connection that does not come from
+`db.connection` still defaults to tuples.
+
+## Do
+
+```python
+async with conn.cursor(row_factory=dict_row) as cur:
+    await cur.execute("SELECT COUNT(*)::bigint AS n FROM …")
+    row = await cur.fetchone()
+n = int(row["n"]) if row else 0
+```
+
+Alias expressions (`COALESCE`, `COUNT`, `EXISTS`) with `AS` so the dict key
+exists. A bare column name is already its key (`c.external_id` → `external_id`).
+
+## tuple_row
+
+`row_factory=tuple_row` is allowed only when a comment on that cursor says why
+it was chosen instead of `dict_row`. Without that comment, use `dict_row` and
+read the row by column name.
+
+## Don't
+
+```python
+# KeyError: 0 — dict rows have no integer keys
+row[0]
+fetchone()[0]
+```

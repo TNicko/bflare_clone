@@ -1,0 +1,254 @@
+# =============================================================================
+# .cursorignore — keep Cursor index lean for this monorepo
+# Biggest local wins: tg_dataset_4 (~6.5G), .venv (~800M), .terraform (~650M),
+# client+admin-client node_modules (~300M), Python/tool caches.
+# =============================================================================
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# -----------------------------------------------------------------------------
+# Secrets & credentials (never index)
+# Keep *.example.env / *.tfvars.example / .migrate.env.example searchable.
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!**/.example.env
+!.migrate.env.example
+!**/*.tfvars.example
+
+.migrate.env
+**/.env
+**/.env.*
+!**/.example.env
+!**/.env.example
+
+# Common secret filenames
+secrets.json
+credentials.json
+**/credentials.json
+**/service-account*.json
+**/google-credentials*.json
+**/firebase*.json
+auth.json
+token.json
+**/secrets/
+**/keys/
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_ecdsa.pub
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.keystore
+*.jks
+
+# Cloud / CLI credential dumps
+.aws/credentials
+.aws/config
+**/aws.json
+.gcloud/
+application_default_credentials.json
+
+# Telethon / Telegram session material
+*.session
+*.session-journal
+**/*.session
+**/*.session-journal
+
+# Terraform state & real variable files (secrets + infra inventory)
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!**/*.tfvars.example
+*.tfplan
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+
+# Local scrape / pipeline runtime state
+scrape_state*.json
+
+# -----------------------------------------------------------------------------
+# Repo-specific heavy / rebuildable data (drastic Cursor win)
+# -----------------------------------------------------------------------------
+# Multi-GB Telegram dataset dumps (do not index)
+tg_dataset_4/
+**/tg_dataset_*/
+data/
+
+# Local embedding / vector stores (from .gitignore)
+.milvus/
+.embstore/
+*.db
+*.db.lock
+
+# Generated schema snapshot
+.schema_snapshot.py
+
+# -----------------------------------------------------------------------------
+# Dependency directories
+# -----------------------------------------------------------------------------
+node_modules/
+**/node_modules/
+.pnp/
+.pnp.js
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+vendor/
+packages/
+
+# Python envs & install metadata
+.venv/
+venv/
+env/
+ENV/
+.python-version
+*.egg-info/
+.eggs/
+site-packages/
+**/site-packages/
+
+# -----------------------------------------------------------------------------
+# Build artifacts & frontend caches
+# -----------------------------------------------------------------------------
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.vite/
+.turbo/
+**/.vite/
+**/dist/
+**/build/
+dist-ssr/
+*.tsbuildinfo
+
+# -----------------------------------------------------------------------------
+# Python / test / type-check caches
+# -----------------------------------------------------------------------------
+**/__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.pytest_cache/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+*.cover
+.cache/
+
+# -----------------------------------------------------------------------------
+# Logs and temporary files
+# -----------------------------------------------------------------------------
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.DS_Store
+**/.DS_Store
+*.swp
+*.swo
+*~
+*.tmp
+*.temp
+*.bak
+*.orig
+Thumbs.db
+
+# Binary / bulk data formats (embeddings, dumps, archives)
+*.parquet
+*.arrow
+*.feather
+*.orc
+*.avro
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.sqlite
+*.sqlite3
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.rar
+*.gz
+*.bz2
+*.xz
+*.wasm
+*.so
+*.dylib
+*.dll
+*.bin
+*.pt
+*.onnx
+*.gguf
+
+# Media caches (local downloads / assets not needed for code search)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.flac
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.ico
+*.psd
+*.tiff
+!**/public/**
+!**/src/**/assets/**
+
+# Source maps & minified bundles
+*.map
+*.min.js
+*.min.css
+
+# -----------------------------------------------------------------------------
+# IDE / editor config (optional; uncomment if you want Cursor to skip these)
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-*
+*.code-workspace
+
+# Docker / local runtime leftovers
+**/docker-data/
+**/.docker/

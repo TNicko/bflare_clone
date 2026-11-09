@@ -1,0 +1,36 @@
+# Prometheus scrapes itself, Alloy, and cAdvisor.
+# Retention: 180d (set via --storage.tsdb.retention.time on the container).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: prometheus
+
+  - job_name: alloy
+    static_configs:
+      - targets: ["alloy:12345"]
+        labels:
+          service: alloy
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: cadvisor
+
+  # App metrics from the Harvest API (Compose publishes :8000 on the host).
+  # host.docker.internal works on Docker Desktop and on Linux with extra_hosts
+  # host-gateway (see docker-compose.yml). Do not expose /metrics on public Caddy.
+  - job_name: harvest-api
+    metrics_path: /metrics
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          service: api

@@ -1,0 +1,152 @@
+[build-system]
+requires = ["setuptools>=82.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harvest-backend"
+version = "0.1.0"
+description = "Harvest backend workspace: shared libs + services."
+requires-python = ">=3.11"
+dependencies = [
+	"pydantic>=2.12.0",
+	"httpx>=0.28.1",
+	"python-dotenv>=1.2.2",
+	"aioboto3==15.5.0",
+	"telethon>=1.43.2,<1.44",
+	"psycopg[binary]==3.3.3",
+	"numpy==2.4.3",
+	"rich==15.0.0",
+	"pyjwt==2.13.0",
+	"cryptography==49.0.0",
+	"sqlalchemy[asyncio]>=2.0.51",
+	"alembic>=1.18.5",
+]
+
+[project.optional-dependencies]
+dev = [
+	"ruff", 
+	"mypy", 
+	"pytest", 
+	"pgvector>=0.5.0",
+]
+api = [ 
+	"fastapi[standard]>=0.115.0", 
+	"uvicorn[standard]>=0.32.0",
+    "stripe>=11,<12",
+    "mcp>=2.3,<3",
+  "pillow>=12.3.0",
+  "pillow-heif>=1.0.0,<2",
+  "ImageHash>=4.3.1",
+  "pyarrow>=16",
+  "lingua-language-detector>=2.0.2",
+]
+embstore = [
+	"pyarrow>=16",
+	"boto3>=1.35",
+]
+embed-images = [
+    "httpx>=0.27",
+    "pyarrow>=16",
+    "boto3>=1.35",
+    "aioboto3>=13.0",
+]
+image-embedding-server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "torch>=2.12.1",
+		"torchvision>=0.27.1",
+    "transformers>=5.12.1",
+    "pillow>=12.3.0",
+    "pillow-heif>=1.0.0,<2",
+]
+text-embedding-server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "torch>=2.12.1",
+    "transformers>=5.12.1",
+    "FlagEmbedding>=1.3.4",
+    "sentencepiece>=0.2.0",
+    "protobuf>=5.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["libs", "."]
+include = [
+	"db*",
+	"telegram*",
+	"bluesky*",
+	"utils*",
+	"aws*",
+	"phash*",
+	"embedding*",
+	"quickwit*",
+	"s3vectors*",
+	"embstore*",
+	"msgstore*",
+	"usage*",
+	"billing*",
+	"services*",
+	"jobs*",
+]
+exclude = ["__pycache__*", "*.egg-info*", "tests*", "build*", "alembic*", "scripts*", "libs*"]
+
+[tool.ruff]
+line-length = 120
+src = ["libs", "services", "jobs"]
+# Jobs agent image is python:3.12; py314 enables PEP 758 except syntax ruff would emit
+# that 3.12 cannot parse. Most other images use 3.14; py312 is the safe common floor.
+target-version = "py312"
+
+# Ruff 0.16+ enables ~413 rules by default. Keep the pre-0.16 set for CI until we
+# deliberately adopt the broader defaults (and clean up the backlog).
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic revision templates often keep unused sqlalchemy/op imports.
+"alembic/versions/*.py" = ["F401"]
+# load_service_dotenv must run before importing modules that read env at import time.
+"services/*/src/config.py" = ["E402"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+# Shared code lives under libs/ but is imported as top-level packages (utils, db, …).
+mypy_path = "libs"
+explicit_package_bases = true
+# Telethon / botocore / etc. ship without type stubs.
+ignore_missing_imports = true
+allow_redefinition = true
+# Scope to installed packages + Harvest API. Bare `mypy` (no packages) would also
+# discover paths under libs/ as libs.*, colliding with mypy_path names.
+packages = [
+	"db",
+	"telegram",
+	"bluesky",
+	"utils",
+	"aws",
+	"phash",
+	"embedding",
+	"quickwit",
+	"embstore",
+	"msgstore",
+	"services.api",
+]
+# First green gate: ignore the large pre-existing typing backlog.
+# Tighten these over time.
+disable_error_code = [
+	"arg-type",
+	"assignment",
+	"attr-defined",
+	"call-arg",
+	"call-overload",
+	"index",
+	"misc",
+	"no-redef",
+	"override",
+	"union-attr",
+	"valid-type",
+	"var-annotated",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

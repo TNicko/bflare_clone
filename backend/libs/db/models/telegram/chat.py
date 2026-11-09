@@ -1,0 +1,112 @@
+"""SQLAlchemy Core models: telegram basic groups and participants."""
+
+from __future__ import annotations
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    PrimaryKeyConstraint,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+
+from db.metadata import metadata
+
+telegram_chats = Table(
+    "telegram_chats",
+    metadata,
+    Column("id", Uuid, primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("external_id", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("title_search", Text),
+    Column("photo", JSONB),
+    Column("participants_count", Integer, nullable=False),
+    Column("date", DateTime(True)),
+    Column("version", Integer, nullable=False),
+    Column("deactivated", Boolean, server_default=text("false")),
+    Column("noforwards", Boolean, server_default=text("false")),
+    Column("default_banned_rights", JSONB),
+    Column("about", Text),
+    Column("has_scheduled", Boolean),
+    Column("translations_disabled", Boolean),
+    Column("pinned_msg_id", Integer),
+    Column("first_message_at", DateTime(True)),
+    Column("requests_pending", Integer),
+    Column("available_reactions", JSONB),
+    Column("reactions_limit", Integer),
+    Column("created_at", DateTime(True), nullable=False, server_default=text("now()")),
+    Column("updated_at", DateTime(True), nullable=False, server_default=text("now()")),
+    Column("profile_photo_s3_uri", Text),
+    Column("harvester_id", Uuid, nullable=False),
+    Column("migrated_to", JSONB),
+    Column("unavailable_at", DateTime(True)),
+    Column("last_participant_fetch_at", DateTime(True)),
+    PrimaryKeyConstraint("id", name="telegram_chats_pkey"),
+    UniqueConstraint("external_id", name="telegram_chats_peer_id_key"),
+    Index(
+        "telegram_chats_title_search_trgm_idx",
+        "title_search",
+        postgresql_using="gin",
+        postgresql_ops={"title_search": "gin_trgm_ops"},
+    ),
+    Index(
+        "telegram_chats_pending_participant_fetch_idx",
+        "created_at",
+        "id",
+        postgresql_where=text("last_participant_fetch_at IS NULL"),
+    ),
+    comment="Basic group: id = our UUID, peer_id = Telegram chat id",
+)
+
+telegram_chat_participants = Table(
+    "telegram_chat_participants",
+    metadata,
+    Column("id", Uuid, primary_key=True, server_default=text("gen_random_uuid()")),
+    Column("external_id", Text, nullable=False),
+    Column("user_id", Text, nullable=False),
+    Column("peer_type", String(50), nullable=False),
+    Column(
+        "is_current_member",
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+        comment="FALSE when user no longer found in participant list (left/removed/banned)",
+    ),
+    Column("left_at", DateTime(True), comment="Set when is_current_member becomes FALSE"),
+    Column("first_seen_at", DateTime(True)),
+    Column("updated_at", DateTime(True), nullable=False, server_default=text("now()")),
+    Column("rank", Text, comment="e.g. creator, admin, restricted, banned"),
+    Column("admin_rights", JSONB),
+    Column("banned_rights", JSONB),
+    Column("title", Text, comment="Custom title for admins"),
+    Column("joined_at", DateTime(True)),
+    Column("created_at", DateTime(True), nullable=False, server_default=text("now()")),
+    Column("inviter_id", BigInteger),
+    Column("promoted_by", BigInteger),
+    Column("kicked_by", BigInteger),
+    Column("subscription_until_at", DateTime(True)),
+    Column("via_request", Boolean),
+    CheckConstraint(
+        "peer_type::text = ANY (ARRAY['channel'::character varying::text, "
+        "'megagroup'::character varying::text, 'chat'::character varying::text])",
+        name="telegram_chat_participants_peer_type",
+    ),
+    PrimaryKeyConstraint("id", name="telegram_chat_participants_pkey"),
+    UniqueConstraint("external_id", "user_id", name="telegram_chat_participants_peer_id_user_id_key"),
+    Index(
+        "telegram_chat_participants_user_joined_idx",
+        "user_id",
+        text("joined_at DESC NULLS LAST"),
+    ),
+    comment="User membership and role in harvested channels/megagroups/chats",
+)

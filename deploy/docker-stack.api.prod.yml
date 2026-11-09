@@ -1,0 +1,65 @@
+# Harvest API — production Swarm stack (Hetzner).
+#
+# Requires backend/services/api/.env (prod secrets, Tailscale URLs, CORS, etc.).
+#
+# Host Caddy: public :443 → 127.0.0.1:8000 (unchanged).
+# Swarm ingress publishes :8000 on all interfaces — Hetzner firewall must deny
+# public :8000 (allow only 22/80/443). See deploy/API_ZERO_DOWNTIME.md.
+
+services:
+  api:
+    image: ${API_IMAGE:-harvest-api:prod}
+    env_file:
+      - ../backend/services/api/.env
+    ports:
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: ingress
+    stop_grace_period: 30s
+    # Swarm overlay DNS does not use the host's Tailscale MagicDNS by default.
+    # Without this, harvest-quickwit / harvest-image-embedding
+    # fail with "Name or service not known". Fallback: pin IPs in extra_hosts.
+    dns:
+      - 100.100.100.100
+      - 8.8.8.8
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      # start-first keeps the old replica's Telegram leases until the new task is
+      # healthy. Startup connects to Milvus without load_collection; telegram
+      # warm_up still needs headroom. Too-short start_period → unhealthy (137) → rollback.
+      start_period: 300s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - PYTHONUNBUFFERED=1
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      restart_policy:
+        condition: any
+        delay: 5s

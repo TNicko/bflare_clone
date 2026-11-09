@@ -1,0 +1,163 @@
+// Harvest local observability: Docker logs → Loki.
+// Container metrics come from the dedicated cAdvisor service (scraped by Prometheus).
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  // Keep by container name (most reliable across Compose + Swarm task IDs).
+  // Swarm tasks look like /harvest-prod_api.1.<id>; Compose like /harvest-indexer.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(harvest-api|harvest-indexer|harvest-prod_api|harvest-jobs-agent).*"
+    action        = "keep"
+  }
+
+  // Default container label from Docker name (/harvest-api-dev, /harvest-prod_api.1.xxx).
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  // Swarm: stable name for Explore (not the per-task suffix).
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "(.+)"
+    target_label  = "container"
+  }
+
+  // Compose service name (local): api → service=api
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(.+)"
+    target_label  = "service"
+  }
+
+  // Swarm service name: harvest-prod_api → service=api
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = ".*_(.+)"
+    target_label  = "service"
+  }
+
+  // Fallbacks if Compose/Swarm service labels are missing.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*api.*)"
+    target_label  = "service"
+    replacement   = "api"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*indexer.*)"
+    target_label  = "service"
+    replacement   = "indexer"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*jobs-agent.*)"
+    target_label  = "service"
+    replacement   = "jobs-agent"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_stack_namespace"]
+    regex         = "(.+)"
+    target_label  = "compose_project"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.docker_logs.rules
+  forward_to    = [loki.process.structured.receiver]
+}
+
+// API emits JSON lines (LOG_FORMAT=json). Promote level/logger/user to Loki labels.
+loki.process "structured" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.match {
+    selector = "{service=\"api\"}"
+
+    stage.json {
+      expressions = {
+        level     = "level",
+        logger    = "logger",
+        msg       = "msg",
+        ts        = "ts",
+        harvester = "harvester",
+        user      = "user",
+        exc_info  = "exc_info",
+      }
+    }
+
+    // Grafana log-level column/bar expects lowercase: info, warning, error, …
+    // Level text lives in Explore's "Display log level" column, not the line body.
+    stage.template {
+      source   = "level_norm"
+      template = "{{ ToLower .level }}"
+    }
+
+    // Default missing user to system; prefix the visible line so Explore shows who.
+    stage.template {
+      source   = "user_norm"
+      template = "{{ if .user }}{{ .user }}{{ else }}system{{ end }}"
+    }
+    stage.template {
+      source   = "line"
+      template = "[{{ .user_norm }}] {{ .msg }}{{ if .exc_info }}\n{{ .exc_info }}{{ end }}"
+    }
+
+    stage.labels {
+      values = {
+        level     = "level_norm",
+        logger    = "logger",
+        harvester = "harvester",
+        user      = "user_norm",
+      }
+    }
+
+    stage.timestamp {
+      source = "ts"
+      format = "2006-01-02T15:04:05.000Z"
+    }
+
+    stage.output {
+      source = "line"
+    }
+  }
+
+  // Prometheus scrapes /metrics every 5s; Swarm/Caddy probe /health ~every 5s.
+  // Keep both out of Loki so Explore/dashboards stay readable.
+  // Match on line body (logger label may be absent for some access formats).
+  stage.match {
+    selector = "{service=\"api\"} |= \"GET /metrics\""
+    action   = "drop"
+  }
+  stage.match {
+    selector = "{service=\"api\"} |= \"GET /health\""
+    action   = "drop"
+  }
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

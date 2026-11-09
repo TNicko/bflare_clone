@@ -1,0 +1,34 @@
+# Fleet jobs agent (pulls harvest_jobs, heartbeats job_workers).
+#
+# From repo root:
+#   cp backend/jobs/.example.env backend/jobs/.env
+#   ./deploy/scripts/jobs-agent-prod-up.sh --build
+#
+# Requires: POSTGRES_DSN, WORKER_ID, and task secrets in backend/jobs/.env
+
+name: harvest-jobs-agent
+
+services:
+  jobs-agent:
+    container_name: harvest-jobs-agent
+    build:
+      context: ../backend
+      dockerfile: jobs/agent/Dockerfile
+    image: harvest-jobs-agent:prod
+    env_file:
+      - ../backend/jobs/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - PYTHONUNBUFFERED=1
+    entrypoint: ["python", "-m", "jobs.agent"]
+    command: ["--loop"]
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+scrape_add_groups_state.json
+scrape_state*.json
+*.tmp
+.milvus/
+*.db
+*.db.lock
+
+# Local embedding store (dev backfill/export target)
+.embstore/
+emb-cache/
+emb-plots/
+
+.migrate.env
+.env
+
+names.txt

@@ -1,0 +1,6 @@
+{
+	"include": ["libs", "services"],
+	"extraPaths": ["libs"],
+	"venvPath": ".",
+	"venv": ".venv",
+}

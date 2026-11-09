@@ -1,0 +1,21 @@
+# Frontend & local dev
+client/
+.venv/
+**/__pycache__/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.env
+**/.env
+!**/.env.example
+!**/.example.env
+
+# Tests & fixtures (not needed in worker images)
+tests/
+*.html
+data/
+
+# Git
+.git/
+.gitignore

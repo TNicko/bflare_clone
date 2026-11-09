@@ -1,0 +1,31 @@
+# GPU BGE-M3 text-embedding server for the AWS embed-fleet TEXT-CUDA workers.
+# Ollama-compatible POST /api/embed so jobs.embed_messages needs no client change.
+# Build from backend/:
+#
+#   docker build -f services/text_embedding/Dockerfile.gpu -t harvest-text-embedding-gpu .
+#
+# Run with: --gpus all
+
+FROM python:3.14-bookworm
+EXPOSE 11434
+WORKDIR /app
+
+# Flaky nvidia CDN (pypi.nvidia.com) caused incomplete-download on cublas;
+# resume retries + pip cache mount + PyPI fallback keep rebuilds recoverable.
+ENV PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=15 \
+    PIP_RESUME_RETRIES=30
+
+COPY pyproject.toml ./
+COPY libs ./libs
+COPY services/text_embedding ./services/text_embedding
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -U pip \
+    && pip install \
+        torch==2.12.1 \
+        --index-url https://download.pytorch.org/whl/cu126 \
+        --extra-index-url https://pypi.org/simple \
+    && pip install -e ".[text-embedding-server]"
+
+CMD ["python", "-m", "services.text_embedding.main"]

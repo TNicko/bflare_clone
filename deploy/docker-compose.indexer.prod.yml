@@ -1,0 +1,29 @@
+# Harvest OpenSearch indexer — production (Hetzner API host).
+#
+# Separate from the API Swarm stack so API rolling updates do not restart this worker.
+#
+# Requires backend/services/indexer/.env.
+
+name: harvest-indexer
+
+services:
+  indexer:
+    build:
+      context: ../backend
+      dockerfile: services/indexer/Dockerfile
+    image: harvest-indexer:prod
+    container_name: harvest-indexer
+    restart: unless-stopped
+    env_file:
+      - ../backend/services/indexer/.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1

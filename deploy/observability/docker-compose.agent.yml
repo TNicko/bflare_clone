@@ -1,0 +1,61 @@
+# Alloy log + metrics shipper for workload hosts (Hetzner work box + Pis).
+#
+# From repo root on each Pi / workload host:
+#   cp deploy/observability/agent/.example.env deploy/observability/agent/.env
+#   # set LOKI_PUSH_URL, PROMETHEUS_REMOTE_WRITE_URL, AGENT_HOSTNAME
+#   ./deploy/scripts/observability-agent-up.sh
+#
+# Obs host must expose Loki (:3100) and Prometheus (:9090) on Tailscale
+# (see README “Multi-host” / LOKI_HOST_BIND + PROMETHEUS_HOST_BIND).
+
+name: harvest-obs-agent
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: harvest-node-exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+  alloy-agent:
+    image: grafana/alloy:v1.7.5
+    container_name: harvest-alloy-agent
+    hostname: ${AGENT_HOSTNAME:-alloy-agent}
+    restart: unless-stopped
+    depends_on:
+      - node-exporter
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12346
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12346:12346"
+    environment:
+      LOKI_PUSH_URL: ${LOKI_PUSH_URL:?Set LOKI_PUSH_URL in deploy/observability/agent/.env}
+      PROMETHEUS_REMOTE_WRITE_URL: ${PROMETHEUS_REMOTE_WRITE_URL:?Set PROMETHEUS_REMOTE_WRITE_URL in deploy/observability/agent/.env}
+      AGENT_HOSTNAME: ${AGENT_HOSTNAME:-}
+    volumes:
+      - ./config/config.alloy.agent:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-agent-data:/var/lib/alloy/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  alloy-agent-data:
